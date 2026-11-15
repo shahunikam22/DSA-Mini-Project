@@ -2,7 +2,7 @@
 
 A Data Structures (DSA) mini project: a C++ console program for managing student marks, plus a browser dashboard that visualises the same logic.
 
-**Author:** Sami Sameer Shaikh, S.Y. IT-C, AISSMS Institute of Information Technology, Pune
+**Author:** Shahu R Nikam, S.Y. IT-C, AISSMS Institute of Information Technology, Pune
 
 ## What is in this repo
 
