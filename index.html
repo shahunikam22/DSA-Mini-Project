@@ -502,5 +502,34 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
   render();
 })();
 </script>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DSA Mini Project</title>
+</head>
+<body>
+
+  <!-- your existing page content here -->
+
+  <!-- Supabase library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- your Supabase code -->
+  <script>
+    const SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function loadStudents() {
+      const { data, error } = await db.from("students").select("*");
+      if (error) return console.error(error);
+      console.log(data);
+    }
+
+    loadStudents();
+  </script>
+
+</body>
+</html>
 </body>
 </html>
