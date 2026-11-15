@@ -518,7 +518,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
   <script>
     const SUPABASE_URL = "https://gnflwsanjwogarxbgcdb.supabase.co/rest/v1/";
     const SUPABASE_ANON_KEY = "sb_publishable_a1Mcd-EcTH7uW5YAECo5BA_EA-ZFKQl";
-    const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const db = supabase.createClient("https://gnflwsanjwogarxbgcdb.supabase.co/rest/v1/","sb_publishable_a1Mcd-EcTH7uW5YAECo5BA_EA-ZFKQl");
 
     async function loadStudents() {
       const { data, error } = await db.from("students").select("*");
