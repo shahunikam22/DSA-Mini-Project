@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Marks Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: summary strip first, then students + actions, then analysis panels, then stack and queue internals. */
+:root {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --ink: #13222b;
+  --muted: #5a6b76;
+  --line: #dbe3e8;
+  --accent: #0b6b6f;
+  --accent-ink: #ffffff;
+  --good: #1a7f4b;
+  --warn: #9a6a0c;
+  --bad: #b83a2b;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1418; --surface: #141d23; --ink: #e5edf1; --muted: #8ea1ad; --line: #25343d;
+    --accent: #4cc3c8; --accent-ink: #072a2c; --good: #4cc38a; --warn: #e0b34f; --bad: #ef7b6b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1418; --surface: #141d23; --ink: #e5edf1; --muted: #8ea1ad; --line: #25343d;
+  --accent: #4cc3c8; --accent-ink: #072a2c; --good: #4cc38a; --warn: #e0b34f; --bad: #ef7b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1, h2 { font-family: var(--font-display); margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 22px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px 24px; }
+.top p { margin: 2px 0 0; color: var(--muted); }
+.out { font-family: var(--font-mono); font-size: 12px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.out.ok { color: var(--good); }
+.out.err { color: var(--bad); }
+
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.tile { padding: 14px 16px; border-right: 1px solid var(--line); min-width: 0; }
+.tile:last-child { border-right: 0; }
+.tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile .v { font-family: var(--font-display); font-size: 26px; font-weight: 600; line-height: 1.2; margin-top: 4px; overflow-wrap: anywhere; }
+.tile .s { font-size: 12px; color: var(--muted); }
+
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.row2b { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.ph { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.tag { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.pb { padding: 14px 16px; }
+
+.list-strip { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.node { flex: none; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; min-width: 64px; }
+.node b { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.node i { font-style: normal; font-size: 11px; color: var(--muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node.sel { border-color: var(--accent); }
+.arrow { flex: none; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.ptr { flex: none; font-family: var(--font-mono); font-size: 11px; padding: 3px 7px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); }
+.ptr.null { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+
+.toolbar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+input, select, button { font: inherit; color: inherit; }
+input, select { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); border-radius: 6px; padding: 7px 14px; font-weight: 500; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td.low { color: var(--bad); font-weight: 600; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+tbody tr.sel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pill { display: inline-block; min-width: 24px; text-align: center; padding: 1px 7px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.g-A, .g-B { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.g-C, .g-D, .g-E { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.g-F { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.empty { padding: 22px 16px; color: var(--muted); }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 11px 8px; cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+form { display: flex; flex-direction: column; gap: 10px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.marks-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+.merit { width: 100%; }
+.merit td:first-child, .merit th:first-child { text-align: left; }
+.merit td:nth-child(2), .merit th:nth-child(2) { text-align: left; }
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.bar { display: grid; grid-template-columns: 92px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: 12px; }
+.bar .lbl { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track { position: relative; height: 10px; background: color-mix(in srgb, var(--muted) 14%, transparent); border-radius: 3px; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px; }
+.fill.f { background: var(--bad); }
+.passline { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1px dashed var(--muted); left: 35%; }
+.bar .val { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.note { margin: 12px 0 0; font-size: 11px; color: var(--muted); }
+
+.stack { display: flex; flex-direction: column; gap: 6px; }
+.item { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+.item.top { border-color: var(--accent); }
+.item .m { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); margin-right: 8px; }
+.ring { display: grid; grid-template-columns: repeat(25, 1fr); gap: 3px; margin: 10px 0 12px; }
+.cell { aspect-ratio: 1; border-radius: 2px; background: color-mix(in srgb, var(--muted) 16%, transparent); position: relative; }
+.cell.on { background: var(--accent); }
+.cell.f { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cell.r::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--warn); border-radius: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--accent); }
+.legend .lf::before { background: transparent; outline: 2px solid var(--ink); }
+.legend .lr::before { background: transparent; border: 2px solid var(--warn); }
+
+@media (max-width: 960px) {
+  .row2, .row3, .row2b { grid-template-columns: minmax(0, 1fr); }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .tile { border-bottom: 1px solid var(--line); }
+  .tile:nth-child(2n) { border-right: 0; }
+  .tile:last-child { grid-column: 1 / -1; border-bottom: 0; }
+}
+@media (max-width: 480px) {
+  .ring { grid-template-columns: repeat(10, 1fr); }
+  .bar { grid-template-columns: 78px minmax(0, 1fr) 46px; }
+}
+@media (prefers-reduced-motion: no-preference) { .fill { transition: width 0.25s ease; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Student Marks Management System</h1>
+      <p>Data Structures project · S.Y. IT · 5 subjects, 100 marks each · sample records loaded</p>
+    </div>
+    <div id="out" class="out" role="status" aria-live="polite">Ready.</div>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Class summary"></section>
+
+  <div class="row2">
+    <section class="panel">
+      <div class="ph"><h2>Students</h2><span class="tag">singly linked list · insert at head O(1) · search O(n)</span></div>
+      <div class="list-strip" id="strip" aria-label="Linked list nodes"></div>
+      <div class="toolbar"><input id="q" type="search" placeholder="Search by roll number or name" aria-label="Search students"></div>
+      <div class="tablewrap" id="tbl"></div>
+    </section>
+
+    <section class="panel">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" aria-selected="true" data-t="add">Add</button>
+        <button class="tab" role="tab" aria-selected="false" data-t="upd">Update</button>
+        <button class="tab" role="tab" aria-selected="false" data-t="del">Delete</button>
+        <button class="tab" role="tab" aria-selected="false" data-t="req">Request</button>
+      </div>
+      <div class="pb">
+        <form id="f-add" data-p="add" autocomplete="off">
+          <label for="a-roll">Roll number<input id="a-roll" type="number" min="1" max="1000000" inputmode="numeric" required></label>
+          <label for="a-name">Name<input id="a-name" type="text" maxlength="49" required></label>
+          <div class="marks-grid" id="a-marks"></div>
+          <button class="btn" type="submit">Add student</button>
+        </form>
+        <form id="f-upd" data-p="upd" hidden autocomplete="off">
+          <label for="u-roll">Roll number<input id="u-roll" type="number" min="1" max="1000000" inputmode="numeric" required></label>
+          <label for="u-sub">Subject<select id="u-sub"></select></label>
+          <label for="u-marks">New marks (0-100)<input id="u-marks" type="number" min="0" max="100" inputmode="numeric" required></label>
+          <div class="actions">
+            <button class="btn" type="submit">Update marks</button>
+            <button class="btn ghost" type="button" id="undo">Undo last update</button>
+          </div>
+          <p class="hint">Each update pushes the old mark onto the undo stack.</p>
+        </form>
+        <form id="f-del" data-p="del" hidden autocomplete="off">
+          <label for="d-roll">Roll number<input id="d-roll" type="number" min="1" max="1000000" inputmode="numeric" required></label>
+          <button class="btn danger" type="submit" id="d-btn">Delete student</button>
+          <p class="hint" id="d-hint">Select a row, then press Delete twice to confirm. Undo entries for that student are removed too.</p>
+        </form>
+        <form id="f-req" data-p="req" hidden autocomplete="off">
+          <label for="r-roll">Student roll number<input id="r-roll" type="number" min="1" max="1000000" inputmode="numeric" required></label>
+          <label for="r-type">Request type<input id="r-type" type="text" list="r-types" maxlength="29" value="Marksheet" required></label>
+          <datalist id="r-types"><option value="Marksheet"><option value="Verification"></datalist>
+          <div class="actions">
+            <button class="btn" type="submit">Add to queue</button>
+            <button class="btn ghost" type="button" id="proc">Process next</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <div class="row3">
+    <section class="panel">
+      <div class="ph"><h2>Merit list</h2><span class="tag" id="sort-tag">bubble sort · O(n²)</span></div>
+      <div class="tablewrap" id="merit"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Subject averages</h2><span class="tag">out of 100</span></div>
+      <div class="pb"><div class="bars" id="subj"></div><p class="note">Dashed line marks the pass mark of 35.</p></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Grade distribution</h2><span class="tag">students per grade</span></div>
+      <div class="pb"><div class="bars" id="gd"></div><p class="note">Any subject below 35 gives grade F.</p></div>
+    </section>
+  </div>
+
+  <div class="row2b">
+    <section class="panel">
+      <div class="ph"><h2>Undo stack</h2><span class="tag" id="stack-tag">array stack · push / pop O(1)</span></div>
+      <div class="pb"><div class="stack" id="stack"></div></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Result requests</h2><span class="tag" id="q-tag">circular queue · 50 slots · FIFO</span></div>
+      <div class="pb">
+        <div class="ring" id="ring" aria-hidden="true"></div>
+        <div class="legend"><span>Pending</span><span class="lf">Front</span><span class="lr">Rear</span></div>
+        <div class="stack" id="reqs"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SUBJECTS = ["DSA", "DBMS", "OOP", "Maths", "Digital Logic"];
+  var MAX_STUDENTS = 100, STACK_SIZE = 100, QUEUE_SIZE = 50;
+  var students = [];            // index 0 is the head of the linked list
+  var stack = [];               // undo stack, last item is the top
+  var queue = new Array(QUEUE_SIZE).fill(null);
+  var front = -1, rear = -1;
+  var selected = null, delArmed = false;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function say(msg, kind) { var o = $("out"); o.textContent = msg; o.className = "out" + (kind ? " " + kind : ""); }
+  function find(roll) { for (var i = 0; i < students.length; i++) if (students[i].roll === roll) return students[i]; return null; }
+  function total(s) { return s.marks.reduce(function (a, b) { return a + b; }, 0); }
+  function pct(s) { return total(s) / SUBJECTS.length; }
+  function grade(s) {
+    for (var i = 0; i < s.marks.length; i++) if (s.marks[i] < 35) return "F";
+    var p = pct(s);
+    if (p >= 90) return "A"; if (p >= 75) return "B"; if (p >= 60) return "C"; if (p >= 50) return "D";
+    return "E";
+  }
+  function readInt(v, lo, hi) { if (v === "" || v == null) return null; var n = Number(v); return Number.isInteger(n) && n >= lo && n <= hi ? n : null; }
+
+  /* ---- operations (same rules as the C++ program) ---- */
+  function addStudent(roll, name, marks) {
+    if (students.length >= MAX_STUDENTS) return "Student limit reached!";
+    if (find(roll)) return "Roll number already exists!";
+    name = name.trim();
+    if (!name) return "Invalid name!";
+    students.unshift({ roll: roll, name: name, marks: marks });
+    return null;
+  }
+  function pushUpdate(roll, subject, oldMarks) {
+    if (stack.length === STACK_SIZE) stack.shift();
+    stack.push({ roll: roll, subject: subject, oldMarks: oldMarks });
+  }
+  function updateMarks(roll, subject, marks) {
+    var s = find(roll);
+    if (!s) return "Student not found!";
+    pushUpdate(roll, subject, s.marks[subject]);
+    s.marks[subject] = marks;
+    return null;
+  }
+  function addRequest(roll, type) {
+    if (!find(roll)) return "Student not found!";
+    type = type.trim();
+    if (!type || type.length > 29) return "Invalid or too long request type!";
+    var next = (rear + 1) % QUEUE_SIZE;
+    if (front !== -1 && next === front) return "Request queue is full!";
+    if (front === -1) front = 0;
+    rear = next;
+    queue[rear] = { roll: roll, type: type };
+    return null;
+  }
+  function pendingIdx() {
+    var out = [];
+    if (front === -1) return out;
+    var i = front;
+    while (true) { out.push(i); if (i === rear) break; i = (i + 1) % QUEUE_SIZE; }
+    return out;
+  }
+
+  /* ---- rendering ---- */
+  function renderTiles() {
+    var n = students.length, el = $("tiles");
+    if (!n) { el.innerHTML = '<div class="tile" style="grid-column:1/-1"><div class="k">Class summary</div><div class="s">No student records available. Add a student to see statistics.</div></div>'; return; }
+    var classTotal = 0, pass = 0, topper = students[0];
+    students.forEach(function (s) { classTotal += total(s); if (grade(s) !== "F") pass++; if (total(s) > total(topper)) topper = s; });
+    var cells = [
+      ["Students", n, "of " + MAX_STUDENTS + " allowed"],
+      ["Class average", (classTotal / (n * SUBJECTS.length)).toFixed(2) + "%", "mean percentage"],
+      ["Passed", pass, Math.round(pass / n * 100) + "% of class"],
+      ["Failed", n - pass, "any subject below 35"],
+      ["Topper", esc(topper.name), total(topper) + " / 500"]
+    ];
+    el.innerHTML = cells.map(function (c) { return '<div class="tile"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + '</div><div class="s">' + c[2] + '</div></div>'; }).join("");
+  }
+  function renderStrip() {
+    var h = '<span class="ptr">HEAD</span><span class="arrow">→</span>';
+    students.forEach(function (s) {
+      h += '<span class="node' + (s.roll === selected ? " sel" : "") + '"><b>' + s.roll + '</b><i>' + esc(s.name) + '</i></span><span class="arrow">→</span>';
+    });
+    $("strip").innerHTML = h + '<span class="ptr null">NULL</span>';
+  }
+  function renderTable() {
+    var q = $("q").value.trim().toLowerCase();
+    var rows = students.filter(function (s) { return !q || String(s.roll).indexOf(q) !== -1 || s.name.toLowerCase().indexOf(q) !== -1; });
+    if (!students.length) { $("tbl").innerHTML = '<div class="empty">No student records found.</div>'; return; }
+    if (!rows.length) { $("tbl").innerHTML = '<div class="empty">Student not found!</div>'; return; }
+    var h = "<table><thead><tr><th>Roll</th><th>Name</th>" + SUBJECTS.map(function (s) { return "<th>" + s + "</th>"; }).join("") + "<th>Total</th><th>%</th><th>Grade</th></tr></thead><tbody>";
+    rows.forEach(function (s) {
+      var g = grade(s);
+      h += '<tr data-roll="' + s.roll + '"' + (s.roll === selected ? ' class="sel"' : "") + '><td class="num">' + s.roll + "</td><td>" + esc(s.name) + "</td>" +
+        s.marks.map(function (m) { return '<td class="num' + (m < 35 ? " low" : "") + '">' + m + "</td>"; }).join("") +
+        '<td class="num">' + total(s) + '</td><td class="num">' + pct(s).toFixed(2) + '</td><td><span class="pill g-' + g + '">' + g + "</span></td></tr>";
+    });
+    $("tbl").innerHTML = h + "</tbody></table>";
+  }
+  function renderMerit() {
+    if (!students.length) { $("merit").innerHTML = '<div class="empty">No student records available.</div>'; return; }
+    var arr = students.slice(), n = arr.length, swaps = 0;
+    for (var i = 0; i < n - 1; i++) for (var j = 0; j < n - i - 1; j++)
+      if (total(arr[j]) < total(arr[j + 1])) { var t = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = t; swaps++; }
+    $("sort-tag").textContent = "bubble sort · " + swaps + " swaps for " + n + " students";
+    var h = '<table class="merit"><thead><tr><th>Rank</th><th>Name</th><th>Total</th><th>%</th></tr></thead><tbody>';
+    arr.forEach(function (s, k) { h += '<tr style="cursor:default"><td class="num">' + (k + 1) + "</td><td>" + esc(s.name) + '</td><td class="num">' + total(s) + '</td><td class="num">' + pct(s).toFixed(2) + "</td></tr>"; });
+    $("merit").innerHTML = h + "</tbody></table>";
+  }
+  function bar(label, val, max, text, isFail) {
+    var w = max ? Math.max(0, Math.min(100, val / max * 100)) : 0;
+    return '<div class="bar"><span class="lbl">' + label + '</span><div class="track"><div class="fill' + (isFail ? " f" : "") + '" style="width:' + w + '%"></div></div><span class="val">' + text + "</span></div>";
+  }
+  function renderCharts() {
+    var n = students.length;
+    $("subj").innerHTML = SUBJECTS.map(function (name, i) {
+      var avg = n ? students.reduce(function (a, s) { return a + s.marks[i]; }, 0) / n : 0;
+      return '<div style="position:relative">' + bar(name, avg, 100, avg.toFixed(1)) + "</div>";
+    }).join("");
+    // pass-mark line: drawn inside the track column using a positioned marker
+    Array.prototype.forEach.call($("subj").querySelectorAll(".track"), function (t) { var l = document.createElement("span"); l.className = "passline"; t.appendChild(l); });
+    var counts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
+    students.forEach(function (s) { counts[grade(s)]++; });
+    $("gd").innerHTML = Object.keys(counts).map(function (g) { return bar("Grade " + g, counts[g], n || 1, counts[g], g === "F"); }).join("");
+  }
+  function renderStack() {
+    $("stack-tag").textContent = "array stack · " + stack.length + " / " + STACK_SIZE + " used";
+    if (!stack.length) { $("stack").innerHTML = '<div class="muted">No updates available to undo.</div>'; $("undo").disabled = true; return; }
+    $("undo").disabled = false;
+    var h = "", shown = 0;
+    for (var i = stack.length - 1; i >= 0 && shown < 6; i--, shown++) {
+      var u = stack[i], s = find(u.roll);
+      h += '<div class="item' + (i === stack.length - 1 ? " top" : "") + '"><span>' + (i === stack.length - 1 ? '<span class="badge">TOP</span>' : "") + "Roll " + u.roll + (s ? " · " + esc(s.name) : "") + '</span><span class="m">' + SUBJECTS[u.subject] + " → " + u.oldMarks + "</span></div>";
+    }
+    if (stack.length > 6) h += '<div class="muted" style="font-size:12px">+ ' + (stack.length - 6) + " older entries</div>";
+    $("stack").innerHTML = h;
+  }
+  function renderQueue() {
+    var pend = pendingIdx(), on = {};
+    pend.forEach(function (i) { on[i] = true; });
+    var h = "";
+    for (var i = 0; i < QUEUE_SIZE; i++) h += '<div class="cell' + (on[i] ? " on" : "") + (i === front ? " f" : "") + (i === rear ? " r" : "") + '"></div>';
+    $("ring").innerHTML = h;
+    $("q-tag").textContent = "circular queue · " + pend.length + " of " + QUEUE_SIZE + " slots · front " + front + ", rear " + rear;
+    $("proc").disabled = !pend.length;
+    if (!pend.length) { $("reqs").innerHTML = '<div class="muted">No pending requests.</div>'; return; }
+    $("reqs").innerHTML = pend.slice(0, 6).map(function (idx, k) {
+      var r = queue[idx], s = find(r.roll);
+      return '<div class="item' + (k === 0 ? " top" : "") + '"><span>' + (k === 0 ? '<span class="badge">NEXT</span>' : "") + "Roll " + r.roll + (s ? " · " + esc(s.name) : "") + '</span><span class="m">' + esc(r.type) + " · slot " + idx + "</span></div>";
+    }).join("") + (pend.length > 6 ? '<div class="muted" style="font-size:12px">+ ' + (pend.length - 6) + " more pending</div>" : "");
+  }
+  function render() { renderTiles(); renderStrip(); renderTable(); renderMerit(); renderCharts(); renderStack(); renderQueue(); }
+
+  /* ---- UI wiring ---- */
+  var marksHtml = SUBJECTS.map(function (s, i) { return '<label for="a-m' + i + '">' + s + '<input id="a-m' + i + '" type="number" min="0" max="100" inputmode="numeric" required></label>'; }).join("");
+  $("a-marks").innerHTML = marksHtml;
+  $("u-sub").innerHTML = SUBJECTS.map(function (s, i) { return '<option value="' + i + '">' + s + "</option>"; }).join("");
+
+  $("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest(".tab"); if (!b) return;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) { t.setAttribute("aria-selected", t === b ? "true" : "false"); });
+    Array.prototype.forEach.call(document.querySelectorAll("form[data-p]"), function (f) { f.hidden = f.dataset.p !== b.dataset.t; });
+    resetDel();
+  });
+  function resetDel() { delArmed = false; $("d-btn").textContent = "Delete student"; }
+
+  $("tbl").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr[data-roll]"); if (!tr) return;
+    selected = Number(tr.dataset.roll);
+    ["u-roll", "d-roll", "r-roll"].forEach(function (id) { $(id).value = selected; });
+    resetDel(); renderStrip(); renderTable();
+    say("Selected roll " + selected + " in the Update, Delete and Request forms.");
+  });
+  $("q").addEventListener("input", renderTable);
+
+  $("f-add").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var roll = readInt($("a-roll").value, 1, 1000000);
+    if (roll === null) return say("Invalid input! Enter a roll number from 1 to 1000000.", "err");
+    var marks = [];
+    for (var i = 0; i < SUBJECTS.length; i++) {
+      var m = readInt($("a-m" + i).value, 0, 100);
+      if (m === null) return say("Invalid input! Marks in " + SUBJECTS[i] + " must be 0 to 100.", "err");
+      marks.push(m);
+    }
+    var err = addStudent(roll, $("a-name").value, marks);
+    if (err) return say(err, "err");
+    selected = roll; e.target.reset(); render();
+    say("Student added successfully! Inserted at the head of the list.", "ok");
+  });
+  $("f-upd").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var roll = readInt($("u-roll").value, 1, 1000000), m = readInt($("u-marks").value, 0, 100);
+    if (roll === null) return say("Invalid input! Enter a roll number from 1 to 1000000.", "err");
+    if (m === null) return say("Invalid input! Enter marks from 0 to 100.", "err");
+    var err = updateMarks(roll, Number($("u-sub").value), m);
+    if (err) return say(err, "err");
+    selected = roll; $("u-marks").value = ""; render();
+    say("Marks updated successfully!", "ok");
+  });
+  $("undo").addEventListener("click", function () {
+    if (!stack.length) return say("No updates available to undo.", "err");
+    var u = stack.pop(), s = find(u.roll);
+    if (!s) { render(); return say("Student no longer exists.", "err"); }
+    s.marks[u.subject] = u.oldMarks; render();
+    say("Update undone successfully! Restored " + SUBJECTS[u.subject] + " marks to " + u.oldMarks + ".", "ok");
+  });
+  $("f-del").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var roll = readInt($("d-roll").value, 1, 1000000);
+    if (roll === null) return say("Invalid input! Enter a roll number from 1 to 1000000.", "err");
+    if (!find(roll)) { resetDel(); return say("Student not found!", "err"); }
+    if (!delArmed) { delArmed = true; $("d-btn").textContent = "Press again to delete roll " + roll; return say("Confirm: this removes the student and their undo entries.", "err"); }
+    students = students.filter(function (s) { return s.roll !== roll; });
+    stack = stack.filter(function (u) { return u.roll !== roll; });
+    if (selected === roll) selected = null;
+    $("d-roll").value = ""; resetDel(); render();
+    say("Student deleted successfully!", "ok");
+  });
+  $("d-roll").addEventListener("input", resetDel);
+  $("f-req").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var roll = readInt($("r-roll").value, 1, 1000000);
+    if (roll === null) return say("Invalid input! Enter a roll number from 1 to 1000000.", "err");
+    var err = addRequest(roll, $("r-type").value);
+    if (err) return say(err, "err");
+    render(); say("Request added to queue!", "ok");
+  });
+  $("proc").addEventListener("click", function () {
+    if (front === -1) return say("No pending requests.", "err");
+    var r = queue[front];
+    queue[front] = null;
+    if (front === rear) { front = rear = -1; } else { front = (front + 1) % QUEUE_SIZE; }
+    render(); say("Processed " + r.type + " request for roll " + r.roll + ".", "ok");
+  });
+
+  /* ---- sample records (clearly marked in the header) ---- */
+  [
+    [41, "Tanvi More", [88, 91, 84, 79, 90]],
+    [42, "Faiz Shaikh", [62, 55, 48, 33, 58]],
+    [44, "Neha Pawar", [95, 92, 97, 89, 94]],
+    [45, "Omkar Jadhav", [30, 52, 61, 45, 50]],
+    [46, "Isha Kulkarni", [76, 81, 70, 68, 74]],
+    [47, "Rohan Deshmukh", [58, 49, 66, 52, 61]],
+    [48, "Sana Khan", [84, 78, 88, 92, 80]],
+    [49, "Aarav Patil", [71, 64, 59, 73, 66]]
+  ].forEach(function (r) { addStudent(r[0], r[1], r[2]); });
+  updateMarks(49, 2, 62);
+  updateMarks(42, 3, 40);
+  addRequest(44, "Marksheet");
+  addRequest(45, "Verification");
+  addRequest(48, "Marksheet");
+  render();
+})();
+</script>
+</body>
+</html>
