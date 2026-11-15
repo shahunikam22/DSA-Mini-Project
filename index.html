@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: summary strip first, then students + actions, then analysis panels, then stack and queue internals. */
 :root {
   --bg: #f3f6f7;
   --surface: #ffffff;
@@ -159,7 +158,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
   <header class="top">
     <div>
       <h1>Student Marks Management System</h1>
-      <p>Data Structures project · S.Y. IT · 5 subjects, 100 marks each · sample records loaded</p>
+      <p>Data Structures project · S.Y. IT · 5 subjects, 100 marks each · <span id="mode">connecting to database...</span></p>
     </div>
     <div id="out" class="out" role="status" aria-live="polite">Ready.</div>
   </header>
@@ -247,8 +246,18 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
   </div>
 </div>
 
+<!-- Supabase library: must load BEFORE the app script below -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 (function () {
+  /* ---- Supabase connection (URL must NOT end with /rest/v1/) ---- */
+  var SUPABASE_URL = "https://gnflwsanjwogarxbgcdb.supabase.co";
+  var SUPABASE_ANON_KEY = "sb_publishable_a1Mcd-EcTH7uW5YAECo5BA_EA-ZFKQl";
+  var db = null;
+  try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { db = null; }
+  var online = false;   // true only after the students table loaded successfully
+
   var SUBJECTS = ["DSA", "DBMS", "OOP", "Maths", "Digital Logic"];
   var MAX_STUDENTS = 100, STACK_SIZE = 100, QUEUE_SIZE = 50;
   var students = [];            // index 0 is the head of the linked list
@@ -270,6 +279,20 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     return "E";
   }
   function readInt(v, lo, hi) { if (v === "" || v == null) return null; var n = Number(v); return Number.isInteger(n) && n >= lo && n <= hi ? n : null; }
+
+  /* ---- database sync: runs in the background, only when connected ---- */
+  function sync(request, okMsg) {
+    if (!online) return;
+    request.then(function (res) {
+      if (res.error) say("Saved on screen, but database error: " + res.error.message, "err");
+      else if (okMsg) say(okMsg, "ok");
+    }, function (err) {
+      say("Saved on screen, but database error: " + (err && err.message ? err.message : err), "err");
+    });
+  }
+  function dbInsert(s) { sync(db.from("students").insert({ roll: s.roll, name: s.name, marks: s.marks })); }
+  function dbUpdateMarks(s) { sync(db.from("students").update({ marks: s.marks }).eq("roll", s.roll)); }
+  function dbDelete(roll) { sync(db.from("students").delete().eq("roll", roll)); }
 
   /* ---- operations (same rules as the C++ program) ---- */
   function addStudent(roll, name, marks) {
@@ -366,7 +389,6 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
       var avg = n ? students.reduce(function (a, s) { return a + s.marks[i]; }, 0) / n : 0;
       return '<div style="position:relative">' + bar(name, avg, 100, avg.toFixed(1)) + "</div>";
     }).join("");
-    // pass-mark line: drawn inside the track column using a positioned marker
     Array.prototype.forEach.call($("subj").querySelectorAll(".track"), function (t) { var l = document.createElement("span"); l.className = "passline"; t.appendChild(l); });
     var counts = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
     students.forEach(function (s) { counts[grade(s)]++; });
@@ -434,6 +456,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     }
     var err = addStudent(roll, $("a-name").value, marks);
     if (err) return say(err, "err");
+    dbInsert(students[0]);
     selected = roll; e.target.reset(); render();
     say("Student added successfully! Inserted at the head of the list.", "ok");
   });
@@ -444,6 +467,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     if (m === null) return say("Invalid input! Enter marks from 0 to 100.", "err");
     var err = updateMarks(roll, Number($("u-sub").value), m);
     if (err) return say(err, "err");
+    dbUpdateMarks(find(roll));
     selected = roll; $("u-marks").value = ""; render();
     say("Marks updated successfully!", "ok");
   });
@@ -451,7 +475,9 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     if (!stack.length) return say("No updates available to undo.", "err");
     var u = stack.pop(), s = find(u.roll);
     if (!s) { render(); return say("Student no longer exists.", "err"); }
-    s.marks[u.subject] = u.oldMarks; render();
+    s.marks[u.subject] = u.oldMarks;
+    dbUpdateMarks(s);
+    render();
     say("Update undone successfully! Restored " + SUBJECTS[u.subject] + " marks to " + u.oldMarks + ".", "ok");
   });
   $("f-del").addEventListener("submit", function (e) {
@@ -462,6 +488,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     if (!delArmed) { delArmed = true; $("d-btn").textContent = "Press again to delete roll " + roll; return say("Confirm: this removes the student and their undo entries.", "err"); }
     students = students.filter(function (s) { return s.roll !== roll; });
     stack = stack.filter(function (u) { return u.roll !== roll; });
+    dbDelete(roll);
     if (selected === roll) selected = null;
     $("d-roll").value = ""; resetDel(); render();
     say("Student deleted successfully!", "ok");
@@ -483,53 +510,47 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
     render(); say("Processed " + r.type + " request for roll " + r.roll + ".", "ok");
   });
 
-  /* ---- sample records (clearly marked in the header) ---- */
-  [
-    [41, "Tanvi More", [88, 91, 84, 79, 90]],
-    [42, "Faiz Shaikh", [62, 55, 48, 33, 58]],
-    [44, "Neha Pawar", [95, 92, 97, 89, 94]],
-    [45, "Omkar Jadhav", [30, 52, 61, 45, 50]],
-    [46, "Isha Kulkarni", [76, 81, 70, 68, 74]],
-    [47, "Rohan Deshmukh", [58, 49, 66, 52, 61]],
-    [48, "Sana Khan", [84, 78, 88, 92, 80]],
-    [49, "Aarav Patil", [71, 64, 59, 73, 66]]
-  ].forEach(function (r) { addStudent(r[0], r[1], r[2]); });
-  updateMarks(49, 2, 62);
-  updateMarks(42, 3, 40);
-  addRequest(44, "Marksheet");
-  addRequest(45, "Verification");
-  addRequest(48, "Marksheet");
-  render();
+  /* ---- startup: load from Supabase, fall back to sample data if it fails ---- */
+  function loadSamples() {
+    [
+      [41, "Tanvi More", [88, 91, 84, 79, 90]],
+      [42, "Faiz Shaikh", [62, 55, 48, 33, 58]],
+      [44, "Neha Pawar", [95, 92, 97, 89, 94]],
+      [45, "Omkar Jadhav", [30, 52, 61, 45, 50]],
+      [46, "Isha Kulkarni", [76, 81, 70, 68, 74]],
+      [47, "Rohan Deshmukh", [58, 49, 66, 52, 61]],
+      [48, "Sana Khan", [84, 78, 88, 92, 80]],
+      [49, "Aarav Patil", [71, 64, 59, 73, 66]]
+    ].forEach(function (r) { addStudent(r[0], r[1], r[2]); });
+    updateMarks(49, 2, 62);
+    updateMarks(42, 3, 40);
+    addRequest(44, "Marksheet");
+    addRequest(45, "Verification");
+    addRequest(48, "Marksheet");
+  }
+
+  async function init() {
+    render();
+    try {
+      if (!db) throw new Error("Supabase library did not load");
+      var res = await db.from("students").select("*").order("created_at", { ascending: false });
+      if (res.error) throw res.error;
+      students = res.data.map(function (r) { return { roll: r.roll, name: r.name, marks: r.marks }; });
+      online = true;
+      $("mode").textContent = "live data from Supabase";
+      render();
+      say("Connected to Supabase. Loaded " + students.length + " student(s).", "ok");
+    } catch (err) {
+      online = false;
+      students = []; stack = []; queue = new Array(QUEUE_SIZE).fill(null); front = rear = -1;
+      loadSamples();
+      $("mode").textContent = "offline: sample records (not saved)";
+      render();
+      say("Database not available: " + (err && err.message ? err.message : err) + ". Showing sample data, changes will not be saved.", "err");
+    }
+  }
+  init();
 })();
 </script>
-<!DOCTYPE html>
-<html>
-<head>
-  <title>DSA Mini Project</title>
-</head>
-<body>
-
-  <!-- your existing page content here -->
-
-  <!-- Supabase library -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- your Supabase code -->
-  <script>
-    const SUPABASE_URL = "https://gnflwsanjwogarxbgcdb.supabase.co/rest/v1/";
-    const SUPABASE_ANON_KEY = "sb_publishable_a1Mcd-EcTH7uW5YAECo5BA_EA-ZFKQl";
-    const db = supabase.createClient("https://gnflwsanjwogarxbgcdb.supabase.co/rest/v1/","sb_publishable_a1Mcd-EcTH7uW5YAECo5BA_EA-ZFKQl");
-
-    async function loadStudents() {
-      const { data, error } = await db.from("students").select("*");
-      if (error) return console.error(error);
-      console.log(data);
-    }
-
-    loadStudents();
-  </script>
-
-</body>
-</html>
 </body>
 </html>
